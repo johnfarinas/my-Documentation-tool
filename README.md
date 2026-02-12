@@ -1,6 +1,6 @@
 # Multi-Session Incident Documentation Tool
 
-**Version:** 3.5 (Stable / Dark Mode Default) **Type:** Client-Side Single Page Application (SPA)
+**(Stable / Dark Mode Default)**  **Type:** Client-Side Single Page Application (SPA)
 
 * * *
 
