@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation Generator | Multi-Session</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #f8fafc; --text-primary: #1e293b; --accent-primary: #2dd4bf;
+      --accent-hover: #0d9488; --border-primary: #e2e8f0; --table-header: #e2e8f0;
+      --table-row-even: #f1f5f9; --table-row-hover: #e6f0fa; --input-bg: #f8fafc;
+      --rich-text-bg: #ffffff; --rich-text-text: #1e293b; --shadow: rgba(0, 0, 0, 0.05);
+      --status-color: #059669;
+      --tab-inactive: #e2e8f0;
+    }
+    .dark-mode {
+      --bg-primary: #1e293b; --text-primary: #e2e8f0; --accent-primary: #2dd4bf;
+      --accent-hover: #0d9488; --border-primary: #334155; --table-header: #334155;
+      --table-row-even: #2d3748; --table-row-hover: #4b5563; --input-bg: #2d3748;
+      --rich-text-bg: #111827; --rich-text-text: #f9fafb; --shadow: rgba(0, 0, 0, 0.3);
+      --status-color: #34d399;
+      --tab-inactive: #374151;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: Consolas, monospace; font-size: 11px; line-height: 1.1;
+      background: var(--bg-primary); color: var(--text-primary);
+      display: flex; flex-direction: column; height: 100vh;
+      padding: 0 8px; transition: background 0.3s ease; overflow: hidden;
+    }
+
+    /* BEAUTIFIED TABS BAR */
+    #tabBar {
+      flex: 0 0 42px; display: flex; align-items: flex-end; /* Align bottom */
+      padding: 0 4px; background: var(--bg-primary);
+      border-bottom: 3px solid var(--accent-primary); /* Thicker active line */
+    }
+    
+    #tabsContainer {
+      display: flex; gap: 4px; /* Requested 4px gap */
+      overflow-x: auto; scrollbar-width: none; /* Hide scrollbar but allow scroll */
+      max-width: calc(100% - 100px); /* Leave room for add button */
+    }
+
+    .tab {
+      display: flex; align-items: center; gap: 8px; 
+      padding: 6px 14px;
+      background: var(--tab-inactive); 
+      border: 1px solid var(--border-primary); border-bottom: none;
+      border-radius: 6px 6px 0 0; 
+      cursor: pointer;
+      color: var(--text-primary); 
+      font-size: 11px; font-weight: 500;
+      opacity: 0.7; transition: all 0.2s ease;
+      white-space: nowrap; margin-bottom: 0px;
+    }
+
+    .tab:hover { opacity: 1; background: var(--table-row-hover); }
+
+    .tab.active { 
+      background: var(--accent-primary); 
+      color: #ffffff; 
+      font-weight: bold; opacity: 1;
+      border-color: var(--accent-primary);
+      padding-bottom: 8px; /* Extend down to cover the border line */
+      margin-bottom: -3px; /* Pull down to merge with border */
+      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+      z-index: 10;
+    }
+
+    .tab-close { 
+      font-weight: bold; font-size: 14px; margin-left: 2px; 
+      width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; transition: background 0.2s;
+    }
+    .tab-close:hover { background: rgba(0,0,0,0.2); color: #fff; }
+
+    #addTabBtn { 
+      margin-left: 8px; padding: 4px 10px; margin-bottom: 6px;
+      border-radius: 4px; background: var(--border-primary); color: var(--text-primary); 
+      cursor: pointer; border: 1px solid var(--border-primary); 
+      font-size: 11px; font-weight: bold; transition: 0.2s;
+    }
+    #addTabBtn:hover { background: var(--accent-primary); color: white; border-color: var(--accent-primary); }
+
+    /* FLEXIBLE MAIN CONTAINER */
+    #mainContent {
+      display: flex; flex-direction: column; flex: 1; 
+      overflow: hidden; gap: 2px; padding-bottom: 2px; padding-top: 6px;
+    }
+
+    h2 { 
+      font-size: 16px; font-weight: bold; color: var(--accent-primary); 
+      margin: 4px 0 2px 0; border-bottom: 1px solid var(--border-primary); 
+      flex: 0 0 auto; 
+    }
+
+    /* Incident Details: 10% Responsive */
+    .incident-details {
+      flex: 0 0 auto; max-height: 15%;
+      background: var(--bg-primary); border: 1px solid var(--border-primary);
+      border-radius: 6px; padding: 4px 8px; display: flex; flex-direction: column; gap: 4px;
+      font-size: 14px;
+    }
+    .id-row-top { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .id-row-vertical { display: flex; flex-direction: column; gap: 4px; }
+    .field-group { display: flex; align-items: center; gap: 6px; }
+    .field-group-v { display: flex; align-items: center; gap: 6px; }
+    .field-group-v label { width: 70px; flex-shrink: 0; }
+    .incident-details label { font-size: 14px; font-weight: bold; color: var(--accent-primary); }
+    .incident-details input, .incident-details textarea { 
+      width: 100%; border: 1px solid var(--border-primary); border-radius: 4px; 
+      padding: 3px 8px; background: var(--input-bg); color: var(--text-primary); outline: none; 
+      font-size: 14px; 
+    }
+    #description { resize: none; overflow-y: auto; height: 1.3em; flex: 1; line-height: 1.2; }
+
+    /* Timeline: 50% flexible weight */
+    .timeline-wrapper {
+      flex: 5 1 0; display: flex; flex-direction: column; 
+      background: var(--bg-primary); border: 1px solid var(--border-primary);
+      border-radius: 6px; padding: 4px; overflow: hidden; min-height: 0;
+    }
+    .table-container { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid var(--border-primary); padding: 4px; vertical-align: top; }
+    th { background: var(--table-header); position: sticky; top: 0; z-index: 10; font-size: 10px; }
+    tbody tr:nth-child(even) { background: var(--table-row-even); }
+    td[contenteditable="true"] { background: var(--input-bg); outline: none; }
+    
+    .delete-btn-3d {
+      background: linear-gradient(180deg, #fca5a5 0%, #f87171 100%);
+      color: #7f1d1d; border: 1px solid #f87171; border-radius: 3px; padding: 1px 4px;
+      font-size: 9px; cursor: pointer; box-shadow: 0 2px 0 #ef4444; font-weight: bold;
+    }
+    .delete-btn-3d:active { transform: translateY(1px); box-shadow: 0 1px 0 #ef4444; }
+
+    /* My Notes: 40% flexible weight */
+    .rich-wrapper {
+      flex: 4 1 0; display: flex; flex-direction: column; 
+      background: var(--bg-primary); border: 1px solid var(--border-primary);
+      border-radius: 6px; padding: 6px; margin-bottom: 2px; overflow: hidden; min-height: 0;
+    }
+    #myNotes { flex: 1; font-size: 11px; padding: 6px; outline: none; background: var(--rich-text-bg); color: var(--rich-text-text); border-radius: 4px; border: 1px inset var(--border-primary); overflow-y: auto; }
+
+    .img-container { position: relative; display: inline-block; margin: 2px; vertical-align: top; }
+    td img { max-height: 40px; max-width: 60px; border-radius: 2px; cursor: pointer; }
+    .img-del-btn { position: absolute; top: -5px; right: -5px; background: #f87171; color: white; border: 1px solid white; border-radius: 50%; width: 14px; height: 14px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 20; }
+    #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center; }
+    #lightbox img { max-width: 90%; max-height: 90%; border: 2px solid white; }
+
+    /* FIXED BOTTOM MENU */
+    .sticky-bar { 
+      flex: 0 0 45px; display: flex; justify-content: center; align-items: center; 
+      gap: 6px; border-top: 2px solid var(--border-primary); background: var(--bg-primary);
+      padding: 4px; width: calc(100% + 16px); margin-left: -8px; z-index: 100;
+    }
+    button.action-btn { padding: 4px 8px; border: none; border-radius: 4px; background: var(--accent-primary); color: #ffffff; cursor: pointer; font-size: 10px; font-weight: 600; }
+    #status { font-size: 9px; color: var(--status-color); margin-left: 8px; font-weight: bold; }
+  </style>
+</head>
+<body class="dark-mode" onload="init()">
+  <div id="tabBar">
+    <div id="tabsContainer"></div>
+    <button id="addTabBtn" onclick="createNewSession()">+ New Session</button>
+  </div>
+
+  <div id="lightbox" onclick="this.style.display='none'"><img id="lightboxImg"></div>
+  
+  <div id="mainContent">
+    <h2>Incident Details</h2>
+    <div class="incident-details">
+      <div class="id-row-top">
+        <div class="field-group"><label>Caller:</label><input id="caller" type="text"></div>
+        <div class="field-group"><label>SDP:</label><input id="sdp" type="text"></div>
+        <div class="field-group"><label>Incident:</label><input id="incident" type="text"></div>
+      </div>
+      <div class="id-row-vertical">
+        <div class="field-group-v"><label>Subject:</label><input id="subject" type="text"></div>
+        <div class="field-group-v"><label>Desc:</label><textarea id="description" oninput="autoExpand(this)"></textarea></div>
+      </div>
+    </div>
+
+    <h2>Timeline (F5 to Add)</h2>
+    <div class="timeline-wrapper">
+      <div class="table-container" id="timelineContainer">
+        <table id="notesTable">
+          <thead><tr><th style="width:15%">Time</th><th style="width:35%">Action</th><th style="width:40%">Result</th><th style="width:10%">Del</th></tr></thead>
+          <tbody id="timelineBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2>My Notes</h2>
+    <div class="rich-wrapper"><div id="myNotes" contenteditable="true"></div></div>
+  </div>
+
+  <div class="sticky-bar">
+    <button class="action-btn" style="background:#f59e0b" onclick="setSaveLocation()">Set Root Folder</button>
+    <button class="action-btn" onclick="saveFile('json')">Save JSON</button>
+    <button class="action-btn" onclick="saveFile('txt')">Save TXT</button>
+    <button class="action-btn" style="background:#8b5cf6" onclick="document.getElementById('fileInput').click()">Open</button>
+    <input type="file" id="fileInput" style="display:none" onchange="openFile(event)">
+    <button class="action-btn" style="background:#0ea5e9" onclick="copyRichText()">Copy</button>
+    <button class="action-btn" style="background:#64748b" onclick="clearData()">Clear</button>
+    <button class="action-btn" onclick="toggleTheme()">Theme</button>
+    <span id="status">Ready</span>
+  </div>
+
+  <script>
+    const myNotes = document.getElementById('myNotes');
+    const statusEl = document.getElementById('status');
+    const timelineContainer = document.getElementById('timelineContainer');
+    const timelineBody = document.getElementById('timelineBody');
+    const tabsContainer = document.getElementById('tabsContainer');
+
+    let sessions = [];
+    let activeSessionId = null;
+    let directoryHandle = null;
+
+    function init() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      if (savedTheme === 'light') document.body.classList.remove('dark-mode');
+      else document.body.classList.add('dark-mode');
+
+      const savedSessions = localStorage.getItem('notesSessions');
+      if (savedSessions) {
+        sessions = JSON.parse(savedSessions);
+        activeSessionId = sessions[0].id;
+        renderTabs();
+        loadSessionData(activeSessionId);
+      } else {
+        createNewSession();
+      }
+
+      window.addEventListener('keydown', (e) => { if (e.key === 'F5') { e.preventDefault(); addRow(); } });
+      document.getElementById('notesTable').addEventListener('click', function(e) {
+        if (e.target.classList.contains('img-del-btn')) {
+          e.preventDefault(); e.stopPropagation();
+          const container = e.target.closest('.img-container');
+          if (container) { container.remove(); autoSave(); }
+        }
+      });
+    }
+
+    function createNewSession() {
+      const id = Date.now();
+      const newSession = {
+        id: id,
+        name: `Session ${sessions.length + 1}`,
+        details: { caller: "", sdp: "", incident: "", subject: "", description: "" },
+        notes: [],
+        rich: ""
+      };
+      sessions.push(newSession);
+      activeSessionId = id;
+      renderTabs();
+      loadSessionData(id);
+      autoSave();
+    }
+
+    function renderTabs() {
+      tabsContainer.innerHTML = "";
+      sessions.forEach(s => {
+        const tab = document.createElement('div');
+        tab.className = `tab ${s.id === activeSessionId ? 'active' : ''}`;
+        tab.innerHTML = `<span>${s.details.sdp || s.name}</span><span class="tab-close" onclick="closeSession(event, ${s.id})">&times;</span>`;
+        tab.onclick = () => switchSession(s.id);
+        tabsContainer.appendChild(tab);
+      });
+    }
+
+    function switchSession(id) { activeSessionId = id; renderTabs(); loadSessionData(id); }
+
+    function loadSessionData(id) {
+      const s = sessions.find(sess => sess.id === id);
+      if(!s) return;
+      document.getElementById('caller').value = s.details.caller;
+      document.getElementById('sdp').value = s.details.sdp;
+      document.getElementById('incident').value = s.details.incident;
+      document.getElementById('subject').value = s.details.subject;
+      document.getElementById('description').value = s.details.description;
+      timelineBody.innerHTML = "";
+      if (s.notes.length) s.notes.forEach(n => addRow(n.time, n.act, n.res, false));
+      else addRow("", "", "", false);
+      myNotes.innerHTML = s.rich || "";
+      autoExpand(document.getElementById('description'));
+    }
+
+    function closeSession(e, id) {
+      e.stopPropagation();
+      const sessIndex = sessions.findIndex(s => s.id === id);
+      if (confirm(`Save before closing?`)) { saveFile('json'); }
+      sessions.splice(sessIndex, 1);
+      if (sessions.length === 0) createNewSession();
+      else {
+        if (activeSessionId === id) activeSessionId = sessions[0].id;
+        renderTabs();
+        loadSessionData(activeSessionId);
+      }
+      autoSave();
+    }
+
+    function autoSave() {
+      const s = sessions.find(sess => sess.id === activeSessionId);
+      if (!s) return;
+      s.details = {
+        caller: document.getElementById('caller').value,
+        sdp: document.getElementById('sdp').value,
+        incident: document.getElementById('incident').value,
+        subject: document.getElementById('subject').value,
+        description: document.getElementById('description').value
+      };
+      s.notes = [...document.querySelectorAll('#timelineBody tr')].map(tr => {
+        const c = tr.querySelectorAll('td');
+        return { time: c[0].innerHTML, act: c[1].innerHTML, res: c[2].innerHTML };
+      });
+      s.rich = myNotes.innerHTML;
+      updatePreview();
+      localStorage.setItem('notesSessions', JSON.stringify(sessions));
+      renderTabs();
+      statusEl.textContent = "Auto-saved";
+    }
+
+    async function setSaveLocation() {
+      try { directoryHandle = await window.showDirectoryPicker(); statusEl.textContent = "Folder: " + directoryHandle.name; } 
+      catch (e) { statusEl.textContent = "Denied"; }
+    }
+
+    async function saveFile(ext) {
+      if (!directoryHandle) { await setSaveLocation(); if (!directoryHandle) return; }
+      try {
+        const s = sessions.find(sess => sess.id === activeSessionId);
+        const baseName = s.details.sdp || `INC_${s.id}`;
+        const imagesFolder = await directoryHandle.getDirectoryHandle('images', { create: true });
+        const sdpFolder = await imagesFolder.getDirectoryHandle('SDP', { create: true });
+        const fileHandle = await sdpFolder.getFileHandle(`${baseName}.${ext}`, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(ext === 'json' ? JSON.stringify(s, null, 2) : myNotes.innerText);
+        await writable.close();
+        statusEl.textContent = "Saved";
+      } catch (e) { statusEl.textContent = "Error"; }
+    }
+
+    function openFile(e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const d = JSON.parse(ev.target.result);
+        d.id = Date.now(); sessions.push(d); activeSessionId = d.id;
+        renderTabs(); loadSessionData(d.id); autoSave();
+      };
+      reader.readAsText(file);
+    }
+
+    function autoExpand(el) { el.style.height = 'inherit'; el.style.height = el.scrollHeight + 'px'; }
+    function toggleTheme() { const isDark = document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', isDark ? 'dark' : 'light'); }
+    function getTimestamp() { const now = new Date(); return `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} ${now.getMonth()+1}/${now.getDate()}`; }
+
+    function updatePreview() {
+      if (document.activeElement === myNotes) return;
+      const s = sessions.find(sess => sess.id === activeSessionId);
+      if(!s) return;
+      const d = s.details, n = s.notes;
+      let html = `<div style="font-family: Consolas, monospace; font-size: 11px;">`;
+      html += `<b>Caller:</b> ${d.caller} | <b>SDP:</b> ${d.sdp} | <b>Incident:</b> ${d.incident}<br><b>Subject:</b> ${d.subject}<br>`;
+      html += `<b>Description:</b> ${d.description}<br><br><b>Timeline</b><br>`;
+      n.forEach(r => { html += `<div style="margin-bottom:4px; border-bottom: 1px dashed #ccc;"><i>${r.time}</i>: ${r.act} -> ${r.res}</div>`; });
+      html += `</div>`;
+      myNotes.innerHTML = html;
+      myNotes.scrollTop = myNotes.scrollHeight;
+    }
+
+    function addRow(t="", a="", r="", triggerSave = true) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td contenteditable="true">${t || getTimestamp()}</td><td contenteditable="true">${a}</td><td contenteditable="true">${r}</td><td style="text-align:center;"><button class="delete-btn-3d">🗑</button></td>`;
+      tr.querySelectorAll('td[contenteditable]').forEach(td => {
+        td.oninput = autoSave;
+        td.onclick = (e) => { if(e.target.tagName === 'IMG') { document.getElementById('lightboxImg').src = e.target.src; document.getElementById('lightbox').style.display = 'flex'; } };
+        td.addEventListener('paste', () => {
+          setTimeout(() => {
+            td.querySelectorAll('img:not(.managed)').forEach(img => {
+              img.classList.add('managed');
+              const container = document.createElement('div'); container.className = 'img-container'; container.contentEditable = false;
+              const del = document.createElement('button'); del.className = 'img-del-btn'; del.innerHTML = '&times;';
+              del.onclick = () => { container.remove(); autoSave(); };
+              img.parentNode.insertBefore(container, img); container.appendChild(img); container.appendChild(del);
+            });
+            autoSave();
+          }, 50);
+        });
+      });
+      const delBtn = tr.querySelector('.delete-btn-3d');
+      let countdown = 3, timer, awaiting = false;
+      delBtn.onclick = () => {
+        if (!awaiting) {
+          awaiting = true; delBtn.textContent = `OK?(${countdown})`;
+          timer = setInterval(() => {
+            if (--countdown > 0) delBtn.textContent = `OK?(${countdown})`;
+            else { clearInterval(timer); delBtn.textContent = "🗑"; awaiting = false; countdown = 3; }
+          }, 1000);
+        } else { clearInterval(timer); tr.remove(); autoSave(); }
+      };
+      timelineBody.appendChild(tr);
+      timelineContainer.scrollTop = timelineContainer.scrollHeight;
+      if(triggerSave) autoSave();
+    }
+
+    async function copyRichText() {
+      const blob = new Blob([myNotes.innerHTML], { type: "text/html" });
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": blob, "text/plain": new Blob([myNotes.innerText], {type: "text/plain"}) })]);
+      statusEl.textContent = "Copied!";
+    }
+
+    function clearData() { if(confirm("Clear session?")) { const s = sessions.find(sess => sess.id === activeSessionId); s.details = {caller:"", sdp:"", incident:"", subject:"", description:""}; s.notes = []; s.rich = ""; loadSessionData(activeSessionId); autoSave(); } }
+    document.querySelectorAll('input').forEach(i => i.oninput = autoSave);
+    myNotes.oninput = autoSave;
+  </script>
+</body>
+</html>
