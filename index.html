@@ -31,7 +31,6 @@
       padding: 0 8px; transition: background 0.3s ease; overflow: hidden;
     }
 
-    /* BEAUTIFIED TABS BAR */
     #tabBar {
       flex: 0 0 42px; display: flex; align-items: flex-end;
       padding: 0 4px; background: var(--bg-primary);
@@ -96,7 +95,7 @@
       flex: 0 0 auto; 
     }
 
-    /* Incident Details: 10% Responsive */
+    /* Incident Details */
     .incident-details {
       flex: 0 0 auto; max-height: 15%;
       background: var(--bg-primary); border: 1px solid var(--border-primary);
@@ -116,7 +115,7 @@
     }
     #description { resize: none; overflow-y: auto; height: 1.3em; flex: 1; line-height: 1.2; }
 
-    /* Timeline: 50% flexible weight */
+    /* Timeline */
     .timeline-wrapper {
       flex: 5 1 0; display: flex; flex-direction: column; 
       background: var(--bg-primary); border: 1px solid var(--border-primary);
@@ -136,25 +135,20 @@
     }
     .delete-btn-3d:active { transform: translateY(1px); box-shadow: 0 1px 0 #ef4444; }
 
-    /* NOTES SPLIT CONTAINER - 40% Height */
+    /* NOTES SPLIT CONTAINER */
     .notes-container {
       flex: 4 1 0; display: flex; gap: 6px; min-height: 0; margin-bottom: 2px;
     }
-
-    /* My Notes: 60% Width */
     .rich-wrapper {
       flex: 0 0 60%; display: flex; flex-direction: column; 
       background: var(--bg-primary); border: 1px solid var(--border-primary);
       border-radius: 6px; padding: 6px; overflow: hidden;
     }
-
-    /* Scratchpad: 40% Width */
     .scratchpad-wrapper {
       flex: 0 0 40%; display: flex; flex-direction: column;
       background: var(--bg-primary); border: 1px solid var(--border-primary);
       border-radius: 6px; padding: 6px; overflow: hidden;
     }
-
     #myNotes, #scratchpad { 
       flex: 1; font-size: 11px; padding: 6px; outline: none; 
       background: var(--rich-text-bg); color: var(--rich-text-text); 
@@ -162,7 +156,6 @@
       overflow-y: auto; resize: none; font-family: Consolas, monospace;
     }
 
-    /* Thumbnails */
     .img-container { position: relative; display: inline-block; margin: 2px; vertical-align: top; }
     td img { max-height: 40px; max-width: 60px; border-radius: 2px; cursor: pointer; }
     .img-del-btn { 
@@ -205,7 +198,7 @@
       </div>
       <div class="id-row-vertical">
         <div class="field-group-v"><label>Subject:</label><input id="subject" type="text"></div>
-        <div class="field-group-v"><label>Desc:</label><textarea id="description" oninput="autoExpand(this)"></textarea></div>
+        <div class="field-group-v"><label>Desc:</label><textarea id="description" oninput="autoExpand(this); autoSave()"></textarea></div>
       </div>
     </div>
 
@@ -268,7 +261,7 @@
         createNewSession();
       }
       
-      updatePreview(); // Sync visual state
+      updatePreview(); 
 
       window.addEventListener('keydown', (e) => { if (e.key === 'F5') { e.preventDefault(); addRow(); } });
       document.getElementById('notesTable').addEventListener('click', function(e) {
@@ -281,6 +274,7 @@
     }
 
     function createNewSession() {
+      autoSave(); 
       const id = Date.now();
       const newSession = {
         id: id,
@@ -288,7 +282,7 @@
         details: { caller: "", sdp: "", incident: "", subject: "", description: "" },
         notes: [],
         rich: "",
-        scratchpad: "" // Initialize Scratchpad
+        scratchpad: ""
       };
       sessions.push(newSession);
       activeSessionId = id;
@@ -308,7 +302,12 @@
       });
     }
 
-    function switchSession(id) { activeSessionId = id; renderTabs(); loadSessionData(id); }
+    function switchSession(id) { 
+      autoSave(); 
+      activeSessionId = id; 
+      renderTabs(); 
+      loadSessionData(id); 
+    }
 
     function loadSessionData(id) {
       const s = sessions.find(sess => sess.id === id);
@@ -318,8 +317,6 @@
       document.getElementById('incident').value = s.details.incident;
       document.getElementById('subject').value = s.details.subject;
       document.getElementById('description').value = s.details.description;
-      
-      // Load Scratchpad
       document.getElementById('scratchpad').value = s.scratchpad || "";
 
       timelineBody.innerHTML = "";
@@ -332,7 +329,9 @@
       }
       myNotes.innerHTML = s.rich || "";
       autoExpand(document.getElementById('description'));
-      if (needsSync) updatePreview(); 
+      
+      // Force sync if default row was added OR if specific fields are present to ensure UI matches state
+      if (needsSync || s.details.caller || s.details.sdp) updatePreview(); 
     }
 
     function closeSession(e, id) {
@@ -363,12 +362,13 @@
         const c = tr.querySelectorAll('td');
         return { time: c[0].innerHTML, act: c[1].innerHTML, res: c[2].innerHTML };
       });
+      
+      // Update s.rich here so it captures the generated preview
+      updatePreview(); 
       s.rich = myNotes.innerHTML;
       
-      // Save Scratchpad
       s.scratchpad = document.getElementById('scratchpad').value;
 
-      updatePreview();
       localStorage.setItem('notesSessions', JSON.stringify(sessions));
       renderTabs();
       statusEl.textContent = "Auto-saved";
@@ -423,15 +423,24 @@
     function getTimestamp() { const now = new Date(); return `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} ${now.getMonth()+1}/${now.getDate()}`; }
 
     function updatePreview() {
+      // Allow updates to flow through even if s.rich exists (removed the blocker)
       if (document.activeElement === myNotes) return;
       const s = sessions.find(sess => sess.id === activeSessionId);
       if(!s) return;
-      const d = s.details, n = s.notes;
+      
+      const d = s.details;
+      // Re-query notes directly from DOM to ensure we capture current state
+      const n = [...document.querySelectorAll('#timelineBody tr')].map(tr => {
+        const c = tr.querySelectorAll('td');
+        return { time: c[0].innerHTML, act: c[1].innerHTML, res: c[2].innerHTML };
+      });
+
       let html = `<div style="font-family: Consolas, monospace; font-size: 11px;">`;
       html += `<b>Caller:</b> ${d.caller} | <b>SDP:</b> ${d.sdp} | <b>Incident:</b> ${d.incident}<br><b>Subject:</b> ${d.subject}<br>`;
       html += `<b>Description:</b> ${d.description}<br><br><b>Timeline</b><br>`;
       n.forEach(r => { html += `<div style="margin-bottom:4px; border-bottom: 1px dashed #ccc;"><i>${r.time}</i>: ${r.act} -> ${r.res}</div>`; });
       html += `</div>`;
+      
       myNotes.innerHTML = html;
       myNotes.scrollTop = myNotes.scrollHeight;
     }
